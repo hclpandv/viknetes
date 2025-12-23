@@ -8,7 +8,7 @@ It is designed for ephemeral labs, quick experiments, and learning—no backgrou
 1. Download the Cli and execute
 
 ```bash
-curl https://raw.githubusercontent.com/hclpandv/viknetes/refs/heads/main/viknetes -o viknetes
-chmod u+x
-./viknetes up 
+curl -sSL https://raw.githubusercontent.com/hclpandv/viknetes/main/viknetes -o viknetes
+chmod +x viknetes
+./viknetes up
 ```
