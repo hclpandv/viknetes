@@ -2,24 +2,51 @@
 set -e
 
 CLUSTER="lab"
-API_PORT=3000
 
-function run() { echo "+ $*"; "$@"; }
+run() { echo "+ $*"; "$@"; }
 
-function install_k3d() {
-    echo "🔧 Installing latest k3d..."
+install_k3d() {
+    if command -v k3d >/dev/null; then
+        echo "✔ k3d already installed"
+        return
+    fi
+    echo "🔧 Installing k3d..."
     curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
 }
 
-function install_kubectl() {
-    echo "🔧 Installing latest kubectl..."
+install_kubectl() {
+    if command -v kubectl >/dev/null; then
+        echo "✔ kubectl already installed"
+        return
+    fi
+    echo "🔧 Installing kubectl..."
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
     chmod +x kubectl
     sudo mv kubectl /usr/local/bin/
 }
 
-function deploy_manifests() {
-    echo "📦 Applying manifests..."
+create_cluster() {
+    if k3d cluster list | grep -q "^$CLUSTER"; then
+        echo "✔ Cluster '$CLUSTER' already exists"
+        return
+    fi
+
+    echo "🚀 Creating k3d cluster..."
+    k3d cluster create "$CLUSTER" \
+        -p "8080:80@loadbalancer" \
+        --k3s-arg "--disable=traefik@server:0"
+
+    echo "📦 Installing Traefik ingress..."
+    kubectl apply -f https://raw.githubusercontent.com/k3s-io/k3s/master/manifests/traefik.yaml
+}
+
+deploy_nginx() {
+    if kubectl get deploy nginx >/dev/null 2>&1; then
+        echo "✔ nginx already deployed"
+        return
+    fi
+
+    echo "📦 Deploying nginx..."
     kubectl create deployment nginx --image=nginx
     kubectl expose deployment nginx --port=80
 
@@ -41,37 +68,38 @@ spec:
             port:
               number: 80
 EOF
-
-    # kubectl apply -f https://raw.githubusercontent.com/hclpandv/k8s-lab/refs/heads/main/viki-web-teminal/deploy.yml
-    # kubectl apply -f https://raw.githubusercontent.com/hclpandv/k8s-lab/refs/heads/main/viki-web-teminal/service.yml
-    # kubectl apply -f https://raw.githubusercontent.com/hclpandv/k8s-lab/refs/heads/main/viki-web-teminal/ingress.yml
 }
 
-function up() {
+up() {
     install_k3d
     install_kubectl
-    k3d cluster create $CLUSTER -p "8080:80@loadbalancer"
-    deploy_manifests
-    echo "✅ Done! Preview URL: Cloud Shell Web Preview → port $API_PORT"
+    create_cluster
+    deploy_nginx
+
+    echo
+    echo "✅ Cluster ready!"
+    echo "➡ Open: http://localhost:8080"
+    echo "➡ Or via Cloud Shell Web Preview (port 8080)"
 }
 
-function down() {
+down() {
     echo "🧹 Deleting cluster..."
-    run k3d cluster delete $CLUSTER
-    echo "🧹 Cleanup done."
+    k3d cluster delete "$CLUSTER" || true
+    echo "✅ Cleanup done"
 }
 
-function status() {
-    run k3d cluster list
-    run kubectl get pods -A
+status() {
+    k3d cluster list
+    kubectl get pods -A
+    kubectl get ingress
 }
 
-CMD=$1
-shift || true
-
-case "$CMD" in
+case "${1:-}" in
     up) up ;;
     down) down ;;
     status) status ;;
-    *) echo "Usage: $0 {up|down|status}"; exit 1 ;;
+    *)
+        echo "Usage: $0 {up|down|status}"
+        exit 1
+        ;;
 esac
