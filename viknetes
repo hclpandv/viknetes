@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -e
+
+CLUSTER="lab"
+API_PORT=3000
+
+function run() { echo "+ $*"; "$@"; }
+
+function install_k3d() {
+    echo "🔧 Installing latest k3d..."
+    curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+}
+
+function install_kubectl() {
+    echo "🔧 Installing latest kubectl..."
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    chmod +x kubectl
+    sudo mv kubectl /usr/local/bin/
+}
+
+function deploy_manifests() {
+    echo "📦 Applying manifests..."
+    kubectl create deployment nginx --image=nginx
+    kubectl expose deployment nginx --port=80
+
+    kubectl apply -f - <<EOF
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx
+spec:
+  rules:
+  - host: nginx.localhost
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx
+            port:
+              number: 80
+EOF
+
+    # kubectl apply -f https://raw.githubusercontent.com/hclpandv/k8s-lab/refs/heads/main/viki-web-teminal/deploy.yml
+    # kubectl apply -f https://raw.githubusercontent.com/hclpandv/k8s-lab/refs/heads/main/viki-web-teminal/service.yml
+    # kubectl apply -f https://raw.githubusercontent.com/hclpandv/k8s-lab/refs/heads/main/viki-web-teminal/ingress.yml
+}
+
+function up() {
+    install_k3d
+    install_kubectl
+    k3d cluster create $CLUSTER -p "8080:80@loadbalancer"
+    deploy_manifests
+    echo "✅ Done! Preview URL: Cloud Shell Web Preview → port $API_PORT"
+}
+
+function down() {
+    echo "🧹 Deleting cluster..."
+    run k3d cluster delete $CLUSTER
+    echo "🧹 Cleanup done."
+}
+
+function status() {
+    run k3d cluster list
+    run kubectl get pods -A
+}
+
+CMD=$1
+shift || true
+
+case "$CMD" in
+    up) up ;;
+    down) down ;;
+    status) status ;;
+    *) echo "Usage: $0 {up|down|status}"; exit 1 ;;
+esac

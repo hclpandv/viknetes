@@ -1,0 +1,1 @@
+# Bash cli to build and test small k3d based kubernetes cluster
