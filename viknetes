@@ -58,7 +58,7 @@ metadata:
   name: headlamp
 rules:
 - apiGroups: [""]
-  resources: ["namespaces","pods","services","configmaps","secrets","events","nodes","persistentvolumeclaims"]
+  resources: ["namespaces","pods","services","configmaps","secrets","events","nodes","persistentvolumeclaims","endpoints","serviceaccounts"]
   verbs: ["get","list","watch","create","update","delete"]
 - apiGroups: ["apps"]
   resources: ["deployments","replicasets","statefulsets","daemonsets"]
@@ -71,6 +71,12 @@ rules:
   verbs: ["*"]
 - apiGroups: ["metrics.k8s.io"]
   resources: ["nodes","pods"]
+  verbs: ["get","list","watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles","rolebindings","clusterroles","clusterrolebindings"]
+  verbs: ["get","list","watch","create","update","delete"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
   verbs: ["get","list","watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
