@@ -58,7 +58,7 @@ metadata:
   name: headlamp
 rules:
 - apiGroups: [""]
-  resources: ["namespaces","pods","services","configmaps","secrets","events","nodes"]
+  resources: ["namespaces","pods","services","configmaps","secrets","events","nodes","persistentvolumeclaims"]
   verbs: ["get","list","watch","create","update","delete"]
 - apiGroups: ["apps"]
   resources: ["deployments","replicasets","statefulsets","daemonsets"]
