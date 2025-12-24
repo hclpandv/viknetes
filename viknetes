@@ -37,23 +37,31 @@ create_cluster() {
         --k3s-arg "--disable=traefik@server:0"
 }
 
-deploy_nginx() {
-    if kubectl get deploy nginx >/dev/null 2>&1; then
-        echo "✔ nginx already deployed"
+deploy_manifests() {
+    local target="$1"
+
+    if [[ -z "$target" ]]; then
+        echo "ℹ No manifests provided"
         return
     fi
 
-    echo "📦 Deploying nginx..."
-    kubectl create deployment nginx --image=nginx
-    kubectl expose deployment nginx --port=80 --type=LoadBalancer
+    if [[ -f "$target" ]] || [[ -d "$target" ]]; then
+        echo "📦 Applying manifests from $target"
+        kubectl apply -f "$target"
+    else
+        echo "❌ '$target' is not a valid file or directory"
+        exit 1
+    fi
 }
+
 
 up() {
     install_k3d
     install_kubectl
     create_cluster
-    deploy_nginx
-
+    # Deploy Headlamp or any app
+    deploy_manifests "manifests/headlamp"
+    
     echo
     echo "✅ Cluster ready!"
     echo "➡ Open: http://localhost:8080"
@@ -69,8 +77,9 @@ down() {
 status() {
     k3d cluster list
     kubectl get pods -A
-    kubectl get ingress
+    kubectl get svc -A
 }
+
 
 case "${1:-}" in
     up) up ;;
