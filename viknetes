@@ -58,7 +58,7 @@ metadata:
   name: headlamp
 rules:
 - apiGroups: [""]
-  resources: ["namespaces","pods","services","configmaps","secrets"]
+  resources: ["namespaces","pods","services","configmaps","secrets","events","nodes"]
   verbs: ["get","list","watch","create","update","delete"]
 - apiGroups: ["apps"]
   resources: ["deployments","replicasets","statefulsets","daemonsets"]
@@ -69,6 +69,9 @@ rules:
 - apiGroups: ["batch"]
   resources: ["jobs","cronjobs"]
   verbs: ["*"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes","pods"]
+  verbs: ["get","list","watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

@@ -12,3 +12,9 @@ curl -sSL https://raw.githubusercontent.com/hclpandv/viknetes/main/viknetes -o v
 chmod +x viknetes
 ./viknetes up
 ```
+
+Copy token: 
+
+```bash
+kubectl exec -n viknetes-system deploy/headlamp -- cat /var/run/secrets/kubernetes.io/serviceaccount/token
+```
