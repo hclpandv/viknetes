@@ -37,35 +37,100 @@ create_cluster() {
         --k3s-arg "--disable=traefik@server:0"
 }
 
-deploy_manifests() {
-    local target="$1"
+deploy_headlamp() {
+    echo "📦 Deploying Headlamp..."
 
-    if [[ -z "$target" ]]; then
-        echo "ℹ No manifests provided"
-        return
-    fi
-
-    if [[ -f "$target" ]] || [[ -d "$target" ]]; then
-        echo "📦 Applying manifests from $target"
-        kubectl apply -f "$target"
-    else
-        echo "❌ '$target' is not a valid file or directory"
-        exit 1
-    fi
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: viknetes-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: headlamp
+  namespace: viknetes-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: headlamp
+rules:
+- apiGroups: [""]
+  resources: ["namespaces","pods","services","configmaps","secrets"]
+  verbs: ["get","list","watch","create","update","delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments","replicasets","statefulsets","daemonsets"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["*"]
+- apiGroups: ["batch"]
+  resources: ["jobs","cronjobs"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: headlamp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: headlamp
+subjects:
+- kind: ServiceAccount
+  name: headlamp
+  namespace: viknetes-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: headlamp
+  namespace: viknetes-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: headlamp
+  template:
+    metadata:
+      labels:
+        app: headlamp
+    spec:
+      serviceAccountName: headlamp
+      containers:
+      - name: headlamp
+        image: ghcr.io/headlamp-k8s/headlamp:latest
+        args:
+        - "-in-cluster"
+        ports:
+        - containerPort: 4466
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: headlamp
+  namespace: viknetes-system
+spec:
+  type: LoadBalancer
+  selector:
+    app: headlamp
+  ports:
+  - port: 80
+    targetPort: 4466
+EOF
 }
-
 
 up() {
     install_k3d
     install_kubectl
     create_cluster
-    # Deploy Headlamp or any app
-    deploy_manifests "manifests/headlamp"
-    
+    deploy_headlamp
+
     echo
     echo "✅ Cluster ready!"
-    echo "➡ Open: http://localhost:8080"
-    echo "➡ Or via Cloud Shell Web Preview (port 8080)"
+    echo "➡ Cloud Shell Web Preview → port 8080"
 }
 
 down() {
@@ -79,7 +144,6 @@ status() {
     kubectl get pods -A
     kubectl get svc -A
 }
-
 
 case "${1:-}" in
     up) up ;;
