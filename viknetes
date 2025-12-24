@@ -35,9 +35,6 @@ create_cluster() {
     k3d cluster create "$CLUSTER" \
         -p "8080:80@loadbalancer" \
         --k3s-arg "--disable=traefik@server:0"
-
-    echo "📦 Installing Traefik ingress..."
-    kubectl apply -f https://raw.githubusercontent.com/k3s-io/k3s/master/manifests/traefik.yaml
 }
 
 deploy_nginx() {
