@@ -3,6 +3,9 @@
 `viknetes` is a lightweight, pure Bash CLI for quickly creating, testing, and tearing down a small k3d-based Kubernetes cluster.
 It is designed for ephemeral labs, quick experiments, and learning—no background services, no APIs, no state.
 
+Typical usecase to install on google/azure cloud shell  https://console.cloud.google.com/
+   
+
 #### How to setup 
 
 1. Download the Cli and execute
