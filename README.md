@@ -22,3 +22,9 @@ Copy token:
 ```bash
 kubectl exec -n viknetes-system deploy/headlamp -- cat /var/run/secrets/kubernetes.io/serviceaccount/token
 ```
+
+Custom port fwd: 
+
+```bash
+kubectl port-forward -n viki-web-terminal svc/viki-web-terminal 7681:7681
+```
