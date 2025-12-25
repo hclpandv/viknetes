@@ -2,7 +2,6 @@
 set -e
 
 CLUSTER="lab"
-APPS=("nginx")  # Add any ephemeral apps you want here
 
 run() { echo "+ $*"; "$@"; }
 
@@ -38,21 +37,6 @@ create_cluster() {
         --k3s-arg "--disable=traefik@server:0"
 }
 
-deploy_apps() {
-    for APP in "${APPS[@]}"; do
-        echo "📦 Deploying $APP in namespace $APP..."
-        kubectl create ns "$APP" 2>/dev/null || true
-
-        if kubectl get deploy -n "$APP" "$APP" >/dev/null 2>&1; then
-            echo "✔ $APP already deployed in namespace $APP"
-            continue
-        fi
-
-        kubectl -n "$APP" create deployment "$APP" --image="$APP"
-        kubectl -n "$APP" expose deployment "$APP" --port=80 --type=LoadBalancer
-    done
-}
-
 deploy_headlamp() {
     echo "📦 Deploying Headlamp..."
 
@@ -73,8 +57,60 @@ kind: ClusterRole
 metadata:
   name: headlamp
 rules:
-- apiGroups: ["*"]
-  resources: ["*"]
+- apiGroups: [""]
+  resources: [
+    "namespaces","pods","services","configmaps","secrets","events",
+    "nodes","persistentvolumeclaims","persistentvolumes","endpoints",
+    "serviceaccounts","resourcequotas","limitranges"
+  ]
+  verbs: ["get","list","watch","create","update","delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments","replicasets","statefulsets","daemonsets"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses","ingressclasses","networkpolicies"]
+  verbs: ["*"]
+- apiGroups: ["gateway.networking.k8s.io"]
+  resources: ["gateways","httproutes","grpcroutes","referencegrants","backendtlspolicies"]
+  verbs: ["*"]
+- apiGroups: ["gateway.networking.x-k8s.io"]
+  resources: ["xbackendtrafficpolicies"]
+  verbs: ["*"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes","pods"]
+  verbs: ["get","list","watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles","rolebindings","clusterroles","clusterrolebindings"]
+  verbs: ["get","list","watch","create","update","delete"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get","list","watch"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses"]
+  verbs: ["get","list","watch","create","update","delete"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["*"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["*"]
+- apiGroups: ["scheduling.k8s.io"]
+  resources: ["priorityclasses"]
+  verbs: ["*"]
+- apiGroups: ["node.k8s.io"]
+  resources: ["runtimeclasses"]
+  verbs: ["*"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["*"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations","validatingwebhookconfigurations"]
+  verbs: ["*"]
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["*"]
+- apiGroups: ["batch"]
+  resources: ["jobs","cronjobs"]
   verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -133,7 +169,6 @@ up() {
     install_k3d
     install_kubectl
     create_cluster
-    deploy_apps
     deploy_headlamp
 
     echo
