@@ -37,6 +37,16 @@ create_cluster() {
         --k3s-arg "--disable=traefik@server:0"
 }
 
+install_ingress() {
+    echo "🌐 Installing NGINX Ingress Controller..."
+    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+
+    kubectl wait \
+      --namespace ingress-nginx \
+      --for=condition=Available deployment/ingress-nginx-controller \
+      --timeout=120s
+}
+
 deploy_headlamp() {
     echo "📦 Deploying Headlamp..."
 
@@ -57,61 +67,7 @@ kind: ClusterRole
 metadata:
   name: headlamp
 rules:
-- apiGroups: [""]
-  resources: [
-    "namespaces","pods","services","configmaps","secrets","events",
-    "nodes","persistentvolumeclaims","persistentvolumes","endpoints",
-    "serviceaccounts","resourcequotas","limitranges"
-  ]
-  verbs: ["get","list","watch","create","update","delete"]
-- apiGroups: ["apps"]
-  resources: ["deployments","replicasets","statefulsets","daemonsets"]
-  verbs: ["*"]
-- apiGroups: ["networking.k8s.io"]
-  resources: ["ingresses","ingressclasses","networkpolicies"]
-  verbs: ["*"]
-- apiGroups: ["gateway.networking.k8s.io"]
-  resources: ["gateways","httproutes","grpcroutes","referencegrants","backendtlspolicies"]
-  verbs: ["*"]
-- apiGroups: ["gateway.networking.x-k8s.io"]
-  resources: ["xbackendtrafficpolicies"]
-  verbs: ["*"]
-- apiGroups: ["metrics.k8s.io"]
-  resources: ["nodes","pods"]
-  verbs: ["get","list","watch"]
-- apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["roles","rolebindings","clusterroles","clusterrolebindings"]
-  verbs: ["get","list","watch","create","update","delete"]
-- apiGroups: ["discovery.k8s.io"]
-  resources: ["endpointslices"]
-  verbs: ["get","list","watch"]
-- apiGroups: ["storage.k8s.io"]
-  resources: ["storageclasses"]
-  verbs: ["get","list","watch","create","update","delete"]
-- apiGroups: ["autoscaling"]
-  resources: ["horizontalpodautoscalers"]
-  verbs: ["*"]
-- apiGroups: ["policy"]
-  resources: ["poddisruptionbudgets"]
-  verbs: ["*"]
-- apiGroups: ["scheduling.k8s.io"]
-  resources: ["priorityclasses"]
-  verbs: ["*"]
-- apiGroups: ["node.k8s.io"]
-  resources: ["runtimeclasses"]
-  verbs: ["*"]
-- apiGroups: ["coordination.k8s.io"]
-  resources: ["leases"]
-  verbs: ["*"]
-- apiGroups: ["admissionregistration.k8s.io"]
-  resources: ["mutatingwebhookconfigurations","validatingwebhookconfigurations"]
-  verbs: ["*"]
-- apiGroups: ["apiextensions.k8s.io"]
-  resources: ["customresourcedefinitions"]
-  verbs: ["*"]
-- apiGroups: ["batch"]
-  resources: ["jobs","cronjobs"]
-  verbs: ["*"]
+$(sed 's/^/  /' <<< "$(kubectl get clusterrole headlamp -o yaml 2>/dev/null || true)")
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -156,12 +112,30 @@ metadata:
   name: headlamp
   namespace: viknetes-system
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: headlamp
   ports:
   - port: 80
     targetPort: 4466
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: headlamp
+  namespace: viknetes-system
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /headlamp
+        pathType: Prefix
+        backend:
+          service:
+            name: headlamp
+            port:
+              number: 80
 EOF
 }
 
@@ -169,11 +143,13 @@ up() {
     install_k3d
     install_kubectl
     create_cluster
+    install_ingress
     deploy_headlamp
 
     echo
     echo "✅ Cluster ready!"
-    echo "➡ Cloud Shell Web Preview → port 8080"
+    echo "➡ Open Cloud Shell Web Preview on port 8080"
+    echo "➡ Headlamp UI: /headlamp"
 }
 
 down() {
@@ -186,6 +162,7 @@ status() {
     k3d cluster list
     kubectl get pods -A
     kubectl get svc -A
+    kubectl get ingress -A
 }
 
 case "${1:-}" in
