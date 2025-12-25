@@ -2,6 +2,7 @@
 set -e
 
 CLUSTER="lab"
+APPS=("nginx")  # Add any ephemeral apps you want here
 
 run() { echo "+ $*"; "$@"; }
 
@@ -37,28 +38,20 @@ create_cluster() {
         --k3s-arg "--disable=traefik@server:0"
 }
 
-install_ingress() {
-    echo "🌐 Installing NGINX Ingress Controller..."
-    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+deploy_apps() {
+    for APP in "${APPS[@]}"; do
+        echo "📦 Deploying $APP in namespace $APP..."
+        kubectl create ns "$APP" 2>/dev/null || true
 
-    echo "⏳ Waiting for ingress controller..."
-    kubectl wait \
-      --namespace ingress-nginx \
-      --for=condition=Available deployment/ingress-nginx-controller \
-      --timeout=120s
+        if kubectl get deploy -n "$APP" "$APP" >/dev/null 2>&1; then
+            echo "✔ $APP already deployed in namespace $APP"
+            continue
+        fi
 
-    echo "⏳ Waiting for admission webhook jobs..."
-    kubectl wait \
-      --namespace ingress-nginx \
-      --for=condition=Complete job/ingress-nginx-admission-create \
-      --timeout=120s
-
-    kubectl wait \
-      --namespace ingress-nginx \
-      --for=condition=Complete job/ingress-nginx-admission-patch \
-      --timeout=120s
+        kubectl -n "$APP" create deployment "$APP" --image="$APP"
+        kubectl -n "$APP" expose deployment "$APP" --port=80 --type=LoadBalancer
+    done
 }
-
 
 deploy_headlamp() {
     echo "📦 Deploying Headlamp..."
@@ -80,7 +73,9 @@ kind: ClusterRole
 metadata:
   name: headlamp
 rules:
-$(sed 's/^/  /' <<< "$(kubectl get clusterrole headlamp -o yaml 2>/dev/null || true)")
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -125,30 +120,12 @@ metadata:
   name: headlamp
   namespace: viknetes-system
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: headlamp
   ports:
   - port: 80
     targetPort: 4466
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: headlamp
-  namespace: viknetes-system
-spec:
-  ingressClassName: nginx
-  rules:
-  - http:
-      paths:
-      - path: /headlamp
-        pathType: Prefix
-        backend:
-          service:
-            name: headlamp
-            port:
-              number: 80
 EOF
 }
 
@@ -156,13 +133,12 @@ up() {
     install_k3d
     install_kubectl
     create_cluster
-    install_ingress
+    deploy_apps
     deploy_headlamp
 
     echo
     echo "✅ Cluster ready!"
-    echo "➡ Open Cloud Shell Web Preview on port 8080"
-    echo "➡ Headlamp UI: /headlamp"
+    echo "➡ Cloud Shell Web Preview → port 8080"
 }
 
 down() {
@@ -175,7 +151,6 @@ status() {
     k3d cluster list
     kubectl get pods -A
     kubectl get svc -A
-    kubectl get ingress -A
 }
 
 case "${1:-}" in
