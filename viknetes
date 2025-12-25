@@ -41,11 +41,24 @@ install_ingress() {
     echo "🌐 Installing NGINX Ingress Controller..."
     kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
 
+    echo "⏳ Waiting for ingress controller..."
     kubectl wait \
       --namespace ingress-nginx \
       --for=condition=Available deployment/ingress-nginx-controller \
       --timeout=120s
+
+    echo "⏳ Waiting for admission webhook jobs..."
+    kubectl wait \
+      --namespace ingress-nginx \
+      --for=condition=Complete job/ingress-nginx-admission-create \
+      --timeout=120s
+
+    kubectl wait \
+      --namespace ingress-nginx \
+      --for=condition=Complete job/ingress-nginx-admission-patch \
+      --timeout=120s
 }
+
 
 deploy_headlamp() {
     echo "📦 Deploying Headlamp..."
