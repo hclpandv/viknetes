@@ -182,10 +182,15 @@ expose_ingress() {
   # Kill any old port-forward
   pkill -f "kubectl port-forward.*ingress-nginx-controller" >/dev/null 2>&1 || true
 
-  # Port-forward ingress controller → 8081
-  echo "🔌 Port-forwarding ingress-nginx → localhost:8081"
-  kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8081:80 \
-    >/tmp/viknetes-ingress.log 2>&1 &
+  # Persistent port-forward in background
+  (
+    while true; do
+      echo "🔌 Port-forwarding ingress-nginx → localhost:8081"
+      kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8081:80 >/tmp/viknetes-ingress.log 2>&1
+      echo "⚠ Port-forward stopped. Restarting in 2s..."
+      sleep 2
+    done
+  ) &
 
   sleep 2
 
@@ -200,6 +205,7 @@ expose_ingress() {
   echo "👉 https://8081-${WEB_HOST}/app1"
   echo "--------------------------------------------"
 }
+
 
 
 
