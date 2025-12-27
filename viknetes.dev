@@ -166,7 +166,7 @@ EOF
 }
 
 expose_ingress() {
-  echo "🌐 Exposing Ingress via NodePort 30601..."
+  echo "🌐 Exposing Ingress via Cloud Shell..."
 
   # Cloud Shell public host
   if [[ -z "$WEB_HOST" ]]; then
@@ -177,27 +177,35 @@ expose_ingress() {
   if ! kubectl get ns ingress-nginx >/dev/null 2>&1; then
     echo "📦 Installing ingress-nginx..."
     kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.7.0/deploy/static/provider/cloud/deploy.yaml
-    # wait a bit for the controller to come up
-    echo "⏳ Waiting 10s for ingress-nginx-controller pods to start..."
-    sleep 10
   fi
 
-  # Patch the ingress-nginx-controller Service to NodePort 30601
-  echo "🔧 Patching ingress-nginx-controller service for NodePort 30601..."
-  kubectl -n ingress-nginx patch svc ingress-nginx-controller \
-    -p '{"spec":{"type":"NodePort","ports":[{"port":80,"targetPort":80,"nodePort":30601}]}}'
+  # Kill any old port-forward
+  pkill -f "kubectl port-forward.*ingress-nginx-controller" >/dev/null 2>&1 || true
+
+  # Persistent port-forward in background (8081 → ingress controller 80)
+  (
+    while true; do
+      echo "🔌 Port-forwarding ingress-nginx → localhost:8081"
+      kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8081:80 >/tmp/viknetes-ingress.log 2>&1
+      echo "⚠ Port-forward stopped. Restarting in 2s..."
+      sleep 2
+    done
+  ) &
+
+  sleep 2
 
   echo ""
   echo "✅ Ingress exposed!"
   echo "--------------------------------------------"
   echo "Base URL:"
-  echo "👉 https://30601-${WEB_HOST}"
+  echo "👉 https://8081-${WEB_HOST}"
   echo ""
-  echo "Examples:"
-  echo "👉 https://30601-${WEB_HOST}/echo"
-  echo "👉 https://30601-${WEB_HOST}/app1"
+  echo "Examples for developers (Headlamp-deployed apps):"
+  echo "👉 https://8081-${WEB_HOST}/echo"
+  echo "👉 https://8081-${WEB_HOST}/app1"
   echo "--------------------------------------------"
 }
+
 
 
 up() {
