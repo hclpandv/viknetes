@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+set -e
+
+CLUSTER="lab"
+
+run() { echo "+ $*"; "$@"; }
+
+install_k3d() {
+    if command -v k3d >/dev/null; then
+        echo "✔ k3d already installed"
+        return
+    fi
+    echo "🔧 Installing k3d..."
+    curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+}
+
+install_kubectl() {
+    if command -v kubectl >/dev/null; then
+        echo "✔ kubectl already installed"
+        return
+    fi
+    echo "🔧 Installing kubectl..."
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    chmod +x kubectl
+    sudo mv kubectl /usr/local/bin/
+}
+
+create_cluster() {
+    if k3d cluster list | grep -q "^$CLUSTER"; then
+        echo "✔ Cluster '$CLUSTER' already exists"
+        return
+    fi
+
+    echo "🚀 Creating k3d cluster..."
+    k3d cluster create "$CLUSTER" \
+        -p "8080:80@loadbalancer" \
+        --k3s-arg "--disable=traefik@server:0"
+}
+
+deploy_headlamp() {
+    echo "📦 Deploying Headlamp..."
+
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: viknetes-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: headlamp
+  namespace: viknetes-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: headlamp
+rules:
+- apiGroups: [""]
+  resources: [
+    "namespaces","pods","services","configmaps","secrets","events",
+    "nodes","persistentvolumeclaims","persistentvolumes","endpoints",
+    "serviceaccounts","resourcequotas","limitranges"
+  ]
+  verbs: ["get","list","watch","create","update","delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments","replicasets","statefulsets","daemonsets"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses","ingressclasses","networkpolicies"]
+  verbs: ["*"]
+- apiGroups: ["gateway.networking.k8s.io"]
+  resources: ["gateways","httproutes","grpcroutes","referencegrants","backendtlspolicies"]
+  verbs: ["*"]
+- apiGroups: ["gateway.networking.x-k8s.io"]
+  resources: ["xbackendtrafficpolicies"]
+  verbs: ["*"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes","pods"]
+  verbs: ["get","list","watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles","rolebindings","clusterroles","clusterrolebindings"]
+  verbs: ["get","list","watch","create","update","delete"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get","list","watch"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses"]
+  verbs: ["get","list","watch","create","update","delete"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["*"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["*"]
+- apiGroups: ["scheduling.k8s.io"]
+  resources: ["priorityclasses"]
+  verbs: ["*"]
+- apiGroups: ["node.k8s.io"]
+  resources: ["runtimeclasses"]
+  verbs: ["*"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["*"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations","validatingwebhookconfigurations"]
+  verbs: ["*"]
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["*"]
+- apiGroups: ["batch"]
+  resources: ["jobs","cronjobs"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: headlamp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: headlamp
+subjects:
+- kind: ServiceAccount
+  name: headlamp
+  namespace: viknetes-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: headlamp
+  namespace: viknetes-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: headlamp
+  template:
+    metadata:
+      labels:
+        app: headlamp
+    spec:
+      serviceAccountName: headlamp
+      containers:
+      - name: headlamp
+        image: ghcr.io/headlamp-k8s/headlamp:latest
+        args:
+        - "-in-cluster"
+        ports:
+        - containerPort: 4466
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: headlamp
+  namespace: viknetes-system
+spec:
+  type: LoadBalancer
+  selector:
+    app: headlamp
+  ports:
+  - port: 80
+    targetPort: 4466
+EOF
+}
+
+expose_ingress() {
+  echo "🌐 Exposing Ingress via Cloud Shell..."
+
+  # Cloud Shell public host
+  if [[ -z "$WEB_HOST" ]]; then
+    export WEB_HOST=$(env | grep WEB_HOST | cut -d= -f2)
+  fi
+
+  # Install ingress-nginx if missing
+  if ! kubectl get ns ingress-nginx >/dev/null 2>&1; then
+    echo "📦 Installing ingress-nginx..."
+    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.7.0/deploy/static/provider/cloud/deploy.yaml
+    kubectl wait --namespace ingress-nginx \
+      --for=condition=ready pod \
+      --selector=app.kubernetes.io/name=ingress-nginx \
+      --timeout=120s
+  fi
+
+  # Kill any old port-forward
+  pkill -f "kubectl port-forward.*ingress-nginx-controller" >/dev/null 2>&1 || true
+
+  # Port-forward ingress controller → 8081
+  echo "🔌 Port-forwarding ingress-nginx → localhost:8081"
+  kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8081:80 \
+    >/tmp/viknetes-ingress.log 2>&1 &
+
+  sleep 2
+
+  echo ""
+  echo "✅ Ingress exposed!"
+  echo "--------------------------------------------"
+  echo "Base URL:"
+  echo "👉 https://8081-${WEB_HOST}"
+  echo ""
+  echo "Examples:"
+  echo "👉 https://8081-${WEB_HOST}/echo"
+  echo "👉 https://8081-${WEB_HOST}/app1"
+  echo "--------------------------------------------"
+}
+
+
+
+up() {
+    install_k3d
+    install_kubectl
+    create_cluster
+    deploy_headlamp
+    expose_ingress
+
+    echo
+    echo "✅ Cluster ready!"
+    echo "➡ Cloud Shell Web Preview → port 8080"
+}
+
+down() {
+    echo "🧹 Deleting cluster..."
+    k3d cluster delete "$CLUSTER" || true
+    echo "✅ Cleanup done"
+}
+
+status() {
+    k3d cluster list
+    kubectl get pods -A
+    kubectl get svc -A
+}
+
+case "${1:-}" in
+    up) up ;;
+    down) down ;;
+    status) status ;;
+    *)
+        echo "Usage: $0 {up|down|status}"
+        exit 1
+        ;;
+esac
+
