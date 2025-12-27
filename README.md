@@ -17,14 +17,31 @@ chmod +x viknetes
 ./viknetes up
 ```
 
-Copy token: 
+2. click on web preview in cloud shell  
+
+   <img width="1501" height="228" alt="Image" src="https://github.com/user-attachments/assets/b0face5c-0ace-4fb6-bfe9-3193c028e12b" />  
+
+4. Copy token for login to HeadLamp UI
 
 ```bash
 kubectl exec -n viknetes-system deploy/headlamp -- cat /var/run/secrets/kubernetes.io/serviceaccount/token
 ```
 
-Custom port fwd: 
+4. Deploying applications (recommended model)
+
+Developers deploy applications only via Headlamp UI Each app typically consists of:
+
+* Namespace
+* Deployment
+* Service (ClusterIP)  
+
+(Ingress is intentionally not used in Cloud Shell due to complexities)
+
+5. Now port forward the services to expose via 
 
 ```bash
-kubectl port-forward -n viki-web-terminal svc/viki-web-terminal 7681:7681
+kubectl -n echo port-forward svc/echo 8081:80
+kubectl -n app1 port-forward svc/app1 8082:80
+# or
+kubectl -n viki-web-terminal port-forward  svc/viki-web-terminal 7681:7681
 ```
