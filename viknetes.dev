@@ -166,7 +166,7 @@ EOF
 }
 
 expose_ingress() {
-  echo "🌐 Exposing Ingress via Cloud Shell..."
+  echo "🌐 Exposing Ingress via NodePort 30601..."
 
   # Cloud Shell public host
   if [[ -z "$WEB_HOST" ]]; then
@@ -177,24 +177,28 @@ expose_ingress() {
   if ! kubectl get ns ingress-nginx >/dev/null 2>&1; then
     echo "📦 Installing ingress-nginx..."
     kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.7.0/deploy/static/provider/cloud/deploy.yaml
+    # wait a bit for the controller to come up
+    echo "⏳ Waiting 10s for ingress-nginx-controller pods to start..."
+    sleep 10
   fi
 
-  # Patch the ingress-nginx service to use NodePort 8081
-  echo "🔧 Patching ingress-nginx-controller service for NodePort 8081..."
+  # Patch the ingress-nginx-controller Service to NodePort 30601
+  echo "🔧 Patching ingress-nginx-controller service for NodePort 30601..."
   kubectl -n ingress-nginx patch svc ingress-nginx-controller \
-    -p '{"spec":{"type":"NodePort","ports":[{"port":80,"targetPort":80,"nodePort":8081}]}}' >/dev/null
+    -p '{"spec":{"type":"NodePort","ports":[{"port":80,"targetPort":80,"nodePort":30601}]}}'
 
   echo ""
   echo "✅ Ingress exposed!"
   echo "--------------------------------------------"
   echo "Base URL:"
-  echo "👉 https://8081-${WEB_HOST}"
+  echo "👉 https://30601-${WEB_HOST}"
   echo ""
   echo "Examples:"
-  echo "👉 https://8081-${WEB_HOST}/echo"
-  echo "👉 https://8081-${WEB_HOST}/app1"
+  echo "👉 https://30601-${WEB_HOST}/echo"
+  echo "👉 https://30601-${WEB_HOST}/app1"
   echo "--------------------------------------------"
 }
+
 
 up() {
     install_k3d
