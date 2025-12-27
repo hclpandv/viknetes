@@ -179,20 +179,10 @@ expose_ingress() {
     kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.7.0/deploy/static/provider/cloud/deploy.yaml
   fi
 
-  # Kill any old port-forward
-  pkill -f "kubectl port-forward.*ingress-nginx-controller" >/dev/null 2>&1 || true
-
-  # Persistent port-forward in background
-  (
-    while true; do
-      echo "🔌 Port-forwarding ingress-nginx → localhost:8081"
-      kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8081:80 >/tmp/viknetes-ingress.log 2>&1
-      echo "⚠ Port-forward stopped. Restarting in 2s..."
-      sleep 2
-    done
-  ) &
-
-  sleep 2
+  # Patch the ingress-nginx service to use NodePort 8081
+  echo "🔧 Patching ingress-nginx-controller service for NodePort 8081..."
+  kubectl -n ingress-nginx patch svc ingress-nginx-controller \
+    -p '{"spec":{"type":"NodePort","ports":[{"port":80,"targetPort":80,"nodePort":8081}]}}' >/dev/null
 
   echo ""
   echo "✅ Ingress exposed!"
@@ -205,9 +195,6 @@ expose_ingress() {
   echo "👉 https://8081-${WEB_HOST}/app1"
   echo "--------------------------------------------"
 }
-
-
-
 
 up() {
     install_k3d
