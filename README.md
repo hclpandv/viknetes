@@ -37,7 +37,7 @@ Developers deploy applications only via Headlamp UI Each app typically consists 
 
 (Ingress is intentionally not used in Cloud Shell due to complexities)
 
-5. Now port forward the services to expose via 
+5. Now port forward the services to expose via google cloud shell web preview
 
 ```bash
 kubectl -n echo port-forward svc/echo 8081:80
