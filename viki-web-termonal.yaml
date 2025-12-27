@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: viki-web-terminal
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: viki-web-terminal
+  namespace: viki-web-terminal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: viki-web-terminal
+  template:
+    metadata:
+      labels:
+        app: viki-web-terminal
+    spec:
+      containers:
+      - name: web-terminal
+        image: raonigabriel/web-terminal:latest
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: "100m"
+        ports:
+        - containerPort: 7681
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: viki-web-terminal
+  namespace: viki-web-terminal
+spec:
+  type: ClusterIP
+  selector:
+    app: viki-web-terminal
+  ports:
+  - port: 7681
+    targetPort: 7681
+    protocol: TCP
+    
+# kubectl port-forward -n viki-web-terminal svc/viki-web-terminal 8082:7681
