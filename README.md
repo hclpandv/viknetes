@@ -6,6 +6,8 @@ It is designed for ephemeral labs, quick experiments, and learning—no backgrou
 Typical usecase is to install on google cloud shell  https://console.cloud.google.com/
 (Azure Cloud Shell runs in a locked-down container environment hence can not use viknetes)
 
+Tested in Github Codespace and it worked like a charm ✅ 
+
 
 #### How to setup 
 
